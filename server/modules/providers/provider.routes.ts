@@ -571,6 +571,14 @@ router.post(
     }
 
     const result = await sessionsService.createAppSession(provider, projectPath, userId);
+    log.debug(
+      'New session: sessionId=%s, username=%s, ip=%s, provider=%s, projectPath=%s',
+      result.sessionId,
+      (req as typeof req & { user?: { username?: string } }).user?.username ?? 'unknown',
+      req.ip ?? 'unknown',
+      provider,
+      projectPath || '(none)',
+    );
     res.status(201).json(createApiSuccessResponse(result));
   }),
 );

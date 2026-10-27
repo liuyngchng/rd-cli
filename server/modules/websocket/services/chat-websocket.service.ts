@@ -437,8 +437,10 @@ export function handleChatConnection(
   request: AuthenticatedWebSocketRequest,
   dependencies: ChatWebSocketDependencies
 ): void {
-  log.info('Chat WebSocket connected');
   const userId = readRequestUserId(request);
+  const username = request?.user?.username ?? 'unknown';
+  const clientIp = request?.socket?.remoteAddress ?? 'unknown';
+  log.info('Chat WebSocket connected: username=%s, ip=%s', username, clientIp);
   addClient(
     userId != null ? Number(userId) : null,
     ws,
@@ -457,6 +459,12 @@ export function handleChatConnection(
       switch (messageType) {
         case 'chat.send':
           await handleChatSend(ws, userId, data, dependencies);
+          log.debug(
+            'Chat message sent: sessionId=%s, username=%s, ip=%s',
+            typeof data.sessionId === 'string' ? data.sessionId : 'unknown',
+            username,
+            clientIp,
+          );
           return;
         case 'chat.abort':
           await handleChatAbort(ws, userId, data, dependencies);
