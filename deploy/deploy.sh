@@ -61,6 +61,7 @@ docker run -dit \
     -e ANTHROPIC_SMALL_FAST_MODEL=deepseek-v4-pro \
     -e CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
     -e CLAUDE_CODE_ATTRIBUTION_HEADER=0 \
+    -e RDCLI_LOG_LEVEL=debug \
     -p ${HOST_PORT}:${CONTAINER_PORT} \
     rd_cli:1.0.1
 

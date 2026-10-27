@@ -86,7 +86,7 @@ const pinoLogger = pino(
         target: 'pino-pretty',
         options: {
           colorize: true,
-          translateTime: 'yyyy-mm-dd HH:MM:ss.l',
+          translateTime: 'SYS:yyyy-mm-dd HH:MM:ss.l',
           ignore: 'pid,hostname',
           messageFormat: '{msg}',
         },
@@ -100,7 +100,7 @@ const pinoLogger = pino(
             target: 'pino-pretty',
             options: {
               colorize: false,
-              translateTime: 'yyyy-mm-dd HH:MM:ss.l',
+              translateTime: 'SYS:yyyy-mm-dd HH:MM:ss.l',
               ignore: 'pid,hostname',
               messageFormat: '{msg}',
             },
