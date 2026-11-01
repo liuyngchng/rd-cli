@@ -4,8 +4,19 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# 镜像版本号：优先用 VERSION 环境变量，否则从 package.json 读取
+IMAGE_VERSION="${VERSION:-}"
+if [ -z "$IMAGE_VERSION" ]; then
+  PKG_JSON="$PROJECT_ROOT/package.json"
+  if [ -f "$PKG_JSON" ]; then
+    IMAGE_VERSION=$(node -e "process.stdout.write(require('$PKG_JSON').version)" 2>/dev/null) || true
+  fi
+  IMAGE_VERSION="${IMAGE_VERSION:-1.0}"
+fi
+IMAGE_NAME="${IMAGE_NAME:-rd-cli}"
+
 # 容器名，同时也是 llm_net 网络内其它容器解析该服务时使用的 DNS 名。
-CONTAINER_NAME=my_rd-cli
+CONTAINER_NAME=rd-cli
 
 # 宿主机端口映射（host_port:container_port）。下方 PUBLIC_PORT 与 HOST_PORT 保持一致，
 # 容器日志才能给出容器外可访问的 URL。
@@ -99,6 +110,6 @@ docker run -dit \
     -e CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
     -e CLAUDE_CODE_ATTRIBUTION_HEADER=0 \
     -p ${HOST_PORT}:${CONTAINER_PORT} \
-    rd-cli:1.0.1
+    ${IMAGE_NAME}:${IMAGE_VERSION}
 
 docker logs -f "$CONTAINER_NAME"

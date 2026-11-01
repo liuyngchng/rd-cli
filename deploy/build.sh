@@ -309,7 +309,6 @@ echo "=== Docker build ==="
 DOCKER_BUILDKIT=1 docker build \
     "${DOCKER_BUILD_ARGS[@]+"${DOCKER_BUILD_ARGS[@]}"}" \
     -t "${FULL_TAG}" \
-    -t "${IMAGE_NAME}:latest" \
     -f "${SCRIPT_DIR}/Dockerfile" \
     "${PROJECT_ROOT}"
 
