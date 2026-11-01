@@ -17,7 +17,7 @@ export type ProofreadTaskRow = {
   file_size: number;
   file_path: string | null;
   additional_instructions: string | null;
-  callback_url: string;
+  callback_url: string | null;
   session_id: string | null;
   result_text: string | null;
   result_json: string | null;
@@ -35,7 +35,7 @@ type CreateTaskInput = {
   fileSize: number;
   filePath?: string;
   additionalInstructions?: string;
-  callbackUrl: string;
+  callbackUrl?: string;
 };
 
 const TASK_COLUMNS = [
@@ -66,7 +66,7 @@ function rowToTask(row: Record<string, unknown>): ProofreadTaskRow {
     file_size: row.file_size as number,
     file_path: row.file_path as string | null,
     additional_instructions: row.additional_instructions as string | null,
-    callback_url: row.callback_url as string,
+    callback_url: row.callback_url as string | null,
     session_id: row.session_id as string | null,
     result_text: row.result_text as string | null,
     result_json: row.result_json as string | null,
@@ -92,7 +92,7 @@ export const proofreadTasksDb = {
       input.fileSize,
       input.filePath ?? null,
       input.additionalInstructions ?? null,
-      input.callbackUrl,
+      input.callbackUrl ?? null,
     );
     return proofreadTasksDb.getTask(input.taskId)!;
   },

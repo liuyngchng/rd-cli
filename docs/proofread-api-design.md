@@ -73,7 +73,7 @@ Platform 模式下可以不传 `x-api-key`。
 
 ## POST /api/proofread — 异步核稿
 
-提交 docx，后台异步核稿，完成后回调 `callback_url`。
+提交 docx，后台异步核稿，完成后回调 `callback_url`（如果提供）；若未提供，通过查询接口轮询获取结果。
 
 ### 请求
 
@@ -86,7 +86,7 @@ Content-Type: multipart/form-data
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `file` | file | 是 | Word 文档（.docx），最大 20MB |
-| `callback_url` | string | 是 | 核稿完成后回调地址，`http://` 或 `https://` |
+| `callback_url` | string | 否 | 核稿完成后回调地址，`http://` 或 `https://`，不传则通过轮询获取结果 |
 | `additional_instructions` | string | 否 | 追加核稿要求 |
 
 ### 响应 (200)
@@ -106,7 +106,7 @@ Content-Type: multipart/form-data
 
 ### 回调
 
-核稿完成后，`callback_url` 会收到一个 POST 请求（失败时自动重试，最多 4 次：2s / 5s / 15s / 30s 超时）。
+核稿完成后，如果提交时提供了 `callback_url`，会收到一个 POST 请求（失败时自动重试，最多 4 次：2s / 5s / 15s / 30s 超时）。
 
 回调请求体：
 

@@ -223,7 +223,7 @@ export function createProofreadRouter(deps: ProofreadRouterDependencies): expres
         ].join('\n'),
         fields: {
           file: '(必填) Word 文档 .docx，最大 20MB',
-          callback_url: '(必填) 核稿完成后回调地址，http:// 或 https://',
+          callback_url: '(可选) 核稿完成后回调地址，http:// 或 https://，不传则通过 GET /api/proofread/task?id=xxx 轮询结果',
           additional_instructions: '(可选) 追加核稿要求',
         },
       },
@@ -353,18 +353,17 @@ export function createProofreadRouter(deps: ProofreadRouterDependencies): expres
           const filePath = path.join(assetsDir, req.file.filename);
           const posixPath = toPosixPath(filePath);
 
-          // callback_url is required.
-          const callbackUrl = normalizeCallbackUrl(req.body.callback_url);
-          if (!callbackUrl) {
-            const raw = typeof req.body.callback_url === 'string' ? req.body.callback_url : '';
-            const bizCode = raw ? 1005 : 1004;
-            const errorMessage = raw
-              ? 'callback_url 格式不合法，必须以 http:// 或 https:// 开头'
-              : '请提供 callback_url 回调地址';
-            log.info('[Proofread API] POST /api/proofread — request error',
-              JSON.stringify({ userId, message: errorMessage }));
-            fail(res, 400, bizCode, errorMessage);
-            return;
+          // callback_url is optional. If provided, it must be a valid http(s) URL.
+          let callbackUrl: string | undefined;
+          const rawCallbackUrl = req.body.callback_url;
+          if (rawCallbackUrl != null && typeof rawCallbackUrl === 'string' && rawCallbackUrl.trim() !== '') {
+            callbackUrl = normalizeCallbackUrl(rawCallbackUrl);
+            if (!callbackUrl) {
+              log.info('[Proofread API] POST /api/proofread — request error',
+                JSON.stringify({ userId, message: 'callback_url 格式不合法，必须以 http:// 或 https:// 开头' }));
+              fail(res, 400, 1005, 'callback_url 格式不合法，必须以 http:// 或 https:// 开头');
+              return;
+            }
           }
 
           const additionalInstructions = typeof req.body.additional_instructions === 'string'

@@ -31,7 +31,7 @@ type CreateProofreadTaskInput = {
   fileName: string;
   fileSize: number;
   additionalInstructions?: string;
-  callbackUrl: string;
+  callbackUrl?: string;
   sessionId: string;
   workspacePath: string;
 };
@@ -457,7 +457,7 @@ export function createProofreadService(deps: ProofreadServiceDependencies) {
         filePath: string;
         fileName: string;
         additionalInstructions?: string;
-        callbackUrl: string;
+        callbackUrl?: string;
         sessionId: string;
         workspacePath: string;
       },
