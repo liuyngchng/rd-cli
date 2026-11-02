@@ -9,6 +9,8 @@
 import crypto from 'crypto';
 
 import { getConnection } from '@/modules/database/connection.js';
+import logger from '@/shared/logger.js';
+const log = logger.child({ module: 'app-config' });
 
 // ---------------------------------------------------------------------------
 // Queries
@@ -47,6 +49,14 @@ export const appConfigDb = {
     if (!secret) {
       secret = crypto.randomBytes(64).toString('hex');
       appConfigDb.set('jwt_secret', secret);
+      log.info('[app-config] JWT secret CREATED (length=%d, first 4 hex chars=%s)',
+        secret.length, secret.slice(0, 4));
+    } else {
+      // Every process start, confirm the secret exists.  If a container
+      // restart somehow lost the database (fresh volume, bad bind-mount),
+      // a missing secret would cause every login token to fail validation.
+      log.info('[app-config] JWT secret EXISTS in db (length=%d, first 4 hex chars=%s)',
+        secret.length, secret.slice(0, 4));
     }
     return secret;
   },

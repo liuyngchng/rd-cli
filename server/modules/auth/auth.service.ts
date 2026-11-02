@@ -164,6 +164,7 @@ export function createAuthService(dependencies: AuthDependencies) {
     async login(usernameInput: unknown, passwordInput: unknown, ip?: string) {
       const username = typeof usernameInput === 'string' ? usernameInput : '';
       const password = typeof passwordInput === 'string' ? passwordInput : '';
+      const loginStart = Date.now();
       if (!username || !password) {
         throw new AppError('Username and password are required', {
           code: 'AUTH_CREDENTIALS_REQUIRED',
@@ -175,6 +176,17 @@ export function createAuthService(dependencies: AuthDependencies) {
       const validPassword = user
         ? await dependencies.comparePassword(password, user.password_hash)
         : false;
+      const compareMs = Date.now() - loginStart;
+
+      // Diagnostic logging for the two failure branches.  This makes it
+      // possible to tell "user does not exist" from "user exists but the
+      // password/hash comparison failed" purely from docker logs.
+      if (!user) {
+        dependencies.logWarn(`[auth] login: user NOT FOUND for username='${username}' (lookup+bccompareMs=${compareMs})`);
+      } else if (!validPassword) {
+        dependencies.logWarn(`[auth] login: password MISMATCH for username='${username}' (bcrypt compareMs=${compareMs})`);
+      }
+
       if (!user || !validPassword) {
         throw new AppError('Invalid username or password', {
           code: 'AUTH_INVALID_CREDENTIALS',

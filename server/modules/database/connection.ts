@@ -12,6 +12,7 @@
 
 import Database from 'better-sqlite3';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -20,6 +21,9 @@ import { debug } from '@/shared/debug.js';
 import logger from '@/shared/logger.js';
 
 const log = logger.child({ module: 'database' });
+
+const getErrorMessage = (err: unknown): string =>
+  err instanceof Error ? err.message : String(err);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -115,8 +119,65 @@ export function getConnection(): Database.Database {
   const dbPath = resolveDatabasePath();
   debug('getConnection: opening database at', dbPath);
 
+  // ── Diagnostic: environment + permission health ────────────────────────
+  // These fire once per process and are meant to make container permission
+  // problems (bind-mount uid mismatch, read-only volume, missing home dir)
+  // visible in `docker logs` without any extra tooling.
+  log.info('[db] getConnection: DATABASE_PATH=%s', dbPath);
+  try {
+    log.info('[db] getConnection: process uid=%s gid=%s home=%s',
+      typeof process.getuid === 'function' ? process.getuid() : '<n/a>',
+      typeof process.getgid === 'function' ? process.getgid() : '<n/a>',
+      os.homedir());
+  } catch (err) {
+    log.warn('[db] getConnection: could not read uid/gid: %s', getErrorMessage(err));
+  }
+
   ensureDatabaseDirectory(dbPath);
+
+  // Report directory + file ownership/permissions before opening.
+  const dbDir = path.dirname(dbPath);
+  try {
+    const dirStat = fs.statSync(dbDir);
+    log.info('[db] getConnection: dbDir=%s mode=%s uid=%s gid=%s',
+      dbDir,
+      (dirStat.mode & 0o777).toString(8),
+      dirStat.uid,
+      dirStat.gid,
+    );
+    try {
+      fs.accessSync(dbDir, fs.constants.W_OK | fs.constants.R_OK);
+      log.info('[db] getConnection: dbDir is readable + writable by current user');
+    } catch (err) {
+      log.error('[db] getConnection: dbDir is NOT readable/writable by current user: %s', getErrorMessage(err));
+    }
+  } catch (err) {
+    log.error('[db] getConnection: cannot stat dbDir %s: %s', dbDir, getErrorMessage(err));
+  }
+
   migrateLegacyDatabase(dbPath);
+
+  if (fs.existsSync(dbPath)) {
+    try {
+      const fileStat = fs.statSync(dbPath);
+      log.info('[db] getConnection: existing db file mode=%s uid=%s gid=%s size=%d',
+        (fileStat.mode & 0o777).toString(8),
+        fileStat.uid,
+        fileStat.gid,
+        fileStat.size,
+      );
+      try {
+        fs.accessSync(dbPath, fs.constants.W_OK | fs.constants.R_OK);
+        log.info('[db] getConnection: existing db file is readable + writable by current user');
+      } catch (err) {
+        log.error('[db] getConnection: existing db file is NOT readable/writable: %s', getErrorMessage(err));
+      }
+    } catch (err) {
+      log.warn('[db] getConnection: cannot stat existing db file: %s', getErrorMessage(err));
+    }
+  } else {
+    log.info('[db] getConnection: db file does not exist yet — will be created on open');
+  }
 
   debug('getConnection: creating Database instance (loading better-sqlite3 native binding)');
   instance = new Database(dbPath);

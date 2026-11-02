@@ -11,6 +11,11 @@ const IS_PLATFORM = process.env.VITE_IS_PLATFORM === 'true';
 
 // Use env var if set, otherwise auto-generate a unique secret per installation
 const JWT_SECRET = process.env.JWT_SECRET || appConfigDb.getOrCreateJwtSecret();
+log.info('[auth] JWT_SECRET source=%s (length=%d, first 4 hex=%s)',
+  process.env.JWT_SECRET ? 'env(JWT_SECRET)' : 'app_config(jwt_secret)',
+  JWT_SECRET.length,
+  JWT_SECRET.slice(0, 4),
+);
 
 // ── API Key ──────────────────────────────────────────────────────────────
 
@@ -57,6 +62,38 @@ const validateApiKey = (req, res, next) => {
 
 // ── JWT Authentication ───────────────────────────────────────────────────
 
+/**
+ * Decodes a token's payload WITHOUT verifying its signature. Used purely for
+ * diagnostics: comparing the token's iat/exp against the server clock is the
+ * fastest way to spot a clock-skew "session expired" loop (container clock vs
+ * browser clock). Never used to make an auth decision.
+ */
+function describeTokenForDiagnostics(token: string) {
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  try {
+    const payload = jwt.decode(token);
+    if (payload && typeof payload === 'object') {
+      const p = payload as Record<string, unknown>;
+      return {
+        serverNow: nowSeconds,
+        iat: p.iat,
+        exp: p.exp,
+        userId: p.userId,
+        jti: p.jti,
+      };
+    }
+  } catch (error) {
+    // Malformed token — return the clock info we do have.
+  }
+  return { serverNow: nowSeconds, iat: undefined, exp: undefined, userId: undefined, jti: undefined };
+}
+
+/** Short non-sensitive preview of a token for log lines. */
+function previewToken(token: string | undefined): string {
+  if (!token) return '<none>';
+  return `${token.slice(0, 16)}... (len=${token.length})`;
+}
+
 const authenticateToken = async (req, res, next) => {
   // Platform mode: use single database user.
   // NOTE: In multi-user deployments, PLATFORM mode bypasses JWT auth and
@@ -90,6 +127,8 @@ const authenticateToken = async (req, res, next) => {
   }
 
   if (!token) {
+    log.warn('[auth] authenticateToken: no token in request (Authorization=%s, query.token=%s)',
+      previewToken(authHeader), req.query.token ? 'present' : 'absent');
     res.setHeader('X-Auth-Error', 'invalid-token');
     return res.status(401).json({
       error: 'Access denied. No token provided.',
@@ -98,6 +137,25 @@ const authenticateToken = async (req, res, next) => {
   }
 
   try {
+    // ── Diagnostic: log clock vs token timestamps BEFORE verify ──────────
+    const diag = describeTokenForDiagnostics(token);
+    log.info('[auth] authenticateToken: serverNow=%d, token.iat=%s, token.exp=%s, userId=%s',
+      diag.serverNow, diag.iat ?? '<none>', diag.exp ?? '<none>', diag.userId ?? '<none>');
+    if (typeof diag.iat === 'number') {
+      const age   = diag.serverNow - diag.iat;
+      const ttl   = (diag.exp as number) - diag.serverNow;
+      log.info('[auth] authenticateToken: token age=%ds, ttl=%ds (iat=%s ago, exp=%s from now)',
+        age, ttl,
+        typeof diag.iat === 'number' ? `${age}s ago` : '?',
+        typeof diag.exp === 'number' ? `in ${ttl}s` : '?');
+      if (ttl < 0) {
+        log.warn('[auth] authenticateToken: token appears EXPIRED by server clock (ttl=%ds)', ttl);
+      }
+      if (age < -120) {
+        log.warn('[auth] authenticateToken: token iat is %ds IN THE FUTURE — server clock may be behind client', Math.abs(age));
+      }
+    }
+
     const decoded = jwt.verify(token, JWT_SECRET);
 
     // Check if this token has been revoked (logout / admin action).
@@ -132,7 +190,15 @@ const authenticateToken = async (req, res, next) => {
     req.user = user;
     next();
   } catch (error) {
+    const diag = describeTokenForDiagnostics(token);
     if (error instanceof jwt.TokenExpiredError) {
+      log.warn(
+        '[auth] authenticateToken: JWT EXPIRED — serverNow=%d, token.iat=%s, token.exp=%s (%s)',
+        diag.serverNow, diag.iat ?? '?', diag.exp ?? '?',
+        typeof diag.exp === 'number'
+          ? `expired ${diag.serverNow - (diag.exp as number)}s ago`
+          : 'unknown expiry',
+      );
       res.setHeader('X-Auth-Error', 'session-expired');
       return res.status(401).json({
         error: 'Session expired. Please log in again.',
@@ -141,8 +207,9 @@ const authenticateToken = async (req, res, next) => {
     }
 
     log.warn(
-      'Token verification failed:',
+      '[auth] authenticateToken: JWT VERIFY FAILED — %s (serverNow=%d, token.iat=%s, token.exp=%s)',
       error instanceof Error ? error.message : String(error),
+      diag.serverNow, diag.iat ?? '?', diag.exp ?? '?',
     );
     res.setHeader('X-Auth-Error', 'invalid-token');
     return res.status(401).json({

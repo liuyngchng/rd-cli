@@ -2,6 +2,8 @@ import express from 'express';
 import type { RequestHandler } from 'express';
 
 import type { createAuthService } from './auth.service.js';
+import logger from '@/shared/logger.js';
+const log = logger.child({ module: 'auth-routes' });
 
 type AuthenticatedRequest = express.Request & { user?: unknown };
 
@@ -40,8 +42,19 @@ export function createAuthRouter(
   router.post('/login', async (req, res, next) => {
     try {
       const body = req.body as { username?: unknown; password?: unknown };
-      res.json(await service.login(body.username, body.password, req.ip));
+      const serverNow = Math.floor(Date.now() / 1000);
+      const username = typeof body.username === 'string' ? body.username : '<not-string>';
+      log.info('[auth] POST /login: username=%s, serverNow=%d, ip=%s', username, serverNow, req.ip);
+      const result = await service.login(body.username, body.password, req.ip);
+      log.info('[auth] POST /login: success for username=%s, token.userId=%s, serverNow=%d',
+        username, result.user?.id ?? '<none>', serverNow);
+      res.json(result);
     } catch (error) {
+      log.warn('[auth] POST /login: failed (username=%s): %s',
+        typeof (req.body as { username?: unknown })?.username === 'string'
+          ? (req.body as { username: string }).username
+          : '<not-string>',
+        error instanceof Error ? error.message : String(error));
       next(error);
     }
   });

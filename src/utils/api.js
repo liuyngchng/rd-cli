@@ -48,9 +48,36 @@ const readTokenClaims = (token) => {
 // reads a still-server-valid token as expired and drops the session.
 export const TOKEN_EXPIRY_SKEW_MS = 60_000;
 
+// ── Diagnostic helpers (tree-shakeable; only used when needed) ────────────
+const LOG_PREFIX = '[auth:client]';
+
+function diagDecodeClaims(token) {
+  const claims = readTokenClaims(token);
+  if (!claims) return null;
+  return {
+    iat: new Date(claims.issuedAt).toISOString(),
+    exp: new Date(claims.expiresAt).toISOString(),
+    now: new Date().toISOString(),
+    ageMs: Date.now() - claims.issuedAt,
+    ttlMs: claims.expiresAt - Date.now(),
+  };
+}
+
 export const isAuthTokenExpired = (token) => {
   const claims = readTokenClaims(token);
-  return claims ? Date.now() >= claims.expiresAt + TOKEN_EXPIRY_SKEW_MS : false;
+  const expired = claims ? Date.now() >= claims.expiresAt + TOKEN_EXPIRY_SKEW_MS : false;
+  if (claims) {
+    const ttlMs = claims.expiresAt - Date.now();
+    const ageMs = Date.now() - claims.issuedAt;
+    if (ttlMs < 0) {
+      console.warn(LOG_PREFIX, 'isAuthTokenExpired: token APPARENTLY EXPIRED (ttlMs=%d, ageMs=%d)',
+        ttlMs, ageMs, diagDecodeClaims(token));
+    } else if (ttlMs < 60_000) {
+      console.info(LOG_PREFIX, 'isAuthTokenExpired: token near expiry (ttlMs=%d, ageMs=%d)',
+        ttlMs, ageMs, diagDecodeClaims(token));
+    }
+  }
+  return expired;
 };
 
 export const getAuthTokenRefreshDelay = (token) => {
@@ -64,6 +91,8 @@ export const getAuthTokenRefreshDelay = (token) => {
 };
 
 export const expireAuthSession = () => {
+  console.warn(LOG_PREFIX, 'expireAuthSession: clearing token from localStorage (trace follows)');
+  console.trace(LOG_PREFIX, 'expireAuthSession call stack');
   localStorage.removeItem('auth-token');
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event(AUTH_SESSION_EXPIRED_EVENT));
@@ -117,7 +146,10 @@ export const authenticatedFetch = (url, options = {}) => {
     if (refreshedToken) {
       storeAuthToken(refreshedToken);
     }
-    if (response.headers.get('X-Auth-Error')) {
+    const authError = response.headers.get('X-Auth-Error');
+    if (authError) {
+      console.warn(LOG_PREFIX, 'authenticatedFetch: received X-Auth-Error=%s for %s (status=%d), clearing session',
+        authError, url, response.status);
       expireAuthSession();
     }
     return response;

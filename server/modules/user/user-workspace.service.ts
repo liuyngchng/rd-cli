@@ -1,8 +1,11 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
 import type { WorkspacePathValidationResult } from '@/shared/types.js';
 import { AppError, normalizeProjectPath } from '@/shared/utils.js';
+import logger from '@/shared/logger.js';
+const log = logger.child({ module: 'user-workspace' });
 
 /**
  * Root directory holding every user's fixed working directory.
@@ -107,7 +110,29 @@ export function createUserWorkspaceService(dependencies: UserWorkspaceDependenci
   /** Creates (idempotently) and returns the user's workspace directory. */
   async function ensureUserWorkspace(userId: number): Promise<string> {
     const workspacePath = buildUserWorkspacePath(userRootPath, userId);
-    await dependencies.fileSystem.mkdir(workspacePath, { recursive: true });
+
+    // ── Diagnostic: report the env + fs state before creating ───────────
+    log.info('[user-workspace] ensureUserWorkspace userId=%d -> path=%s', userId, workspacePath);
+    try {
+      const parentStat = fs.statSync(path.dirname(workspacePath));
+      log.info('[user-workspace] parent dir stat: mode=%s uid=%s gid=%s',
+        (parentStat.mode & 0o777).toString(8), parentStat.uid, parentStat.gid);
+    } catch (err) {
+      log.warn('[user-workspace] cannot stat parent dir %s: %s',
+        path.dirname(workspacePath),
+        err instanceof Error ? err.message : String(err));
+    }
+
+    try {
+      await dependencies.fileSystem.mkdir(workspacePath, { recursive: true });
+      log.info('[user-workspace] ensureUserWorkspace userId=%d: directory ensured at %s', userId, workspacePath);
+    } catch (err) {
+      log.error('[user-workspace] ensureUserWorkspace userId=%d: FAILED to create %s — %s',
+        userId, workspacePath,
+        err instanceof Error ? `${err.constructor.name}: ${err.message}` : String(err));
+      throw err;
+    }
+
     return workspacePath;
   }
 
