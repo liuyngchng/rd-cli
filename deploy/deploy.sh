@@ -11,7 +11,7 @@ if [ -z "$IMAGE_VERSION" ]; then
   if [ -f "$PKG_JSON" ]; then
     IMAGE_VERSION=$(node -e "process.stdout.write(require('$PKG_JSON').version)" 2>/dev/null) || true
   fi
-  IMAGE_VERSION="${IMAGE_VERSION:-1.0}"
+  IMAGE_VERSION="${IMAGE_VERSION:-1.0.1}"
 fi
 IMAGE_NAME="${IMAGE_NAME:-rd-cli}"
 
