@@ -214,15 +214,15 @@ npx electron-builder --projectDir .desktop-build/desktop-app --linux deb
 
 ```bash
 # 1. 把数据目录还给当前用户，让 mkdir 能跑
-sudo chown -R $(id -u):$(id -g) /data1/app/rd_cli/data/rdcli
+sudo chown -R $(id -u):$(id -g) /data1/app/rd-cli/data/rdcli
 
 # 2. 启动容器
 ./deploy/deploy.sh
 
 # 3. 容器起来后，把目录还给容器进程（uid=1000），让它能读写
 #    另开终端或在 Ctrl+C 退出日志后执行：
-sudo chown -R 1000:1000 /data1/app/rd_cli/data/rdcli
-docker restart my_rd_cli
+sudo chown -R 1000:1000 /data1/app/rd-cli/data/rdcli
+docker restart my_rd-cli
 ```
 
 > 首次部署时目录尚不存在，第 1 步可跳过。后续每次重跑都需要这三步循环。

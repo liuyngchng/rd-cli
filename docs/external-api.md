@@ -7,7 +7,7 @@ rdCLI 提供 HTTP API，允许外部程序通过 API Key 提交文档或代码�
 ## 目录
 
 - [鉴权方式](#鉴权方式)
-- [API 1：文档核稿（异步回调）](#api-1文档核稿异步回调) — 提交文档和回调地址，核稿完成后主动推送 Markdown 核稿意见
+- [API 1：文档核稿（异步回调/轮询）](#api-1文档核稿异步回调) — 提交文档，核稿完成后可回调推送或轮询获取 Markdown 核稿意见
 - [API 2：文档核稿（会话跳转）](#api-2文档核稿会话跳转) — 提交文档，返回聊天链接供人工复核
 - [API 3：通用 Agent](#api-3通用-agent) — 触发 Claude 操作代码仓库
 - [获取 API Key](#获取-api-key)
@@ -67,7 +67,7 @@ API 1（异步核稿）与 API 2（会话跳转）的所有接口，以及异步
 | `1001` | 400 | 未上传文件 |
 | `1002` | 400 | 文件格式不支持（仅支持 .docx） |
 | `1003` | 400 | 文件超过 20MB 上限 |
-| `1004` | 400 | 未提供 `callback_url` |
+| `1004` | 400 | （已废弃，`callback_url` 不再必填） |
 | `1005` | 400 | `callback_url` 格式非法（必须以 `http://` 或 `https://` 开头） |
 | `1006` | 429 | 同时处理的核稿任务已达上限（5 个） |
 | `1007` | 400 | 缺少 `?id=<taskId>` 参数 |
@@ -81,9 +81,9 @@ API 1（异步核稿）与 API 2（会话跳转）的所有接口，以及异步
 
 ## API 1：文档核稿（异步回调）
 
-提交 .docx 文档并提供一个回调地址，创建异步核稿任务。任务在后台由 Claude 处理，完成后 rdCLI 主动调用回调地址，把 Markdown 格式的核稿意见推送给调用方，无需人工介入、无需轮询。
+提交 .docx 文档并（可选）提供一个回调地址，创建异步核稿任务。任务在后台由 Claude 处理，完成后可主动调用回调地址，把 Markdown 格式的核稿意见推送给调用方；若未提供回调地址，调用方可通过查询接口轮询获取结果。
 
-> 推荐用于 OA 系统集成等全自动场景。如果需要人工复核和追问，请使用 [API 2：文档核稿（会话跳转）](#api-2文档核稿会话跳转)。
+> 推荐用于 OA 系统集成等全自动场景（也可不传 `callback_url`，通过轮询获取结果）。如果需要人工复核和追问，请使用 [API 2：文档核稿（会话跳转）](#api-2文档核稿会话跳转)。
 
 ### 整体流程
 
@@ -127,7 +127,7 @@ OA 系统                                          rdCLI
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `file` | file | ✅ | Word 文档（.docx），最大 20MB |
-| `callback_url` | string | ✅ | 核稿完成后回调的地址，`http://` 或 `https://` 均可 |
+| `callback_url` | string | | 核稿完成后回调的地址，`http://` 或 `https://` 均可。不传则通过查询接口获取结果 |
 | `additional_instructions` | string | | 追加的核稿要求，例如"重点检查数据引用"、"只看格式问题" |
 
 **响应（200）：**
@@ -153,9 +153,9 @@ OA 系统                                          rdCLI
 
 ```json
 {
-  "code": 1004,
+  "code": 1005,
   "timestamp": "2026-10-22 18:00:01",
-  "message": "请提供 callback_url 回调地址",
+  "message": "callback_url 格式不合法，必须以 http:// 或 https:// 开头",
   "task_id": null,
   "data": {}
 }
@@ -166,7 +166,6 @@ OA 系统                                          rdCLI
 | 1001 | 未上传文件 |
 | 1002 | 文件格式不支持（仅支持 .docx） |
 | 1003 | 文件超过 20MB 上限 |
-| 1004 | 未提供 `callback_url` |
 | 1005 | `callback_url` 格式非法（必须以 `http://` 或 `https://` 开头） |
 
 **错误响应（429）：**
@@ -277,9 +276,11 @@ OA 系统                                          rdCLI
 
 **回调约定：**
 
+- 仅当提交时提供了 `callback_url` 才会触发回调推送
 - rdCLI 回调你的地址后，**必须返回 `2xx` 状态码**，否则视为回调失败
 - 回调失败会重试，最多 **3 次**，间隔递增；重试仍失败则放弃
 - `callback_url` 支持 `http://` 和 `https://`；使用 `https://` 时**忽略证书校验**（自签名证书可直接使用）
+- 未提供 `callback_url` 时，可通过 `GET /api/proofread/task?id=<taskId>` 轮询查询结果
 
 ### 任务状态流转
 
@@ -301,7 +302,7 @@ pending ──→ processing ──→ completed
 | `failed` | 核稿失败，`error_message` 字段有错误原因 |
 | `cancelled` | 已撤销，`error_message` 字段有撤销说明 |
 
-以上任一状态到达终态（`completed` / `failed` / `cancelled`）后，都会触发一次回调推送。
+以上任一状态到达终态（`completed` / `failed` / `cancelled`）后，如果提交时提供了 `callback_url`，都会触发一次回调推送。
 
 ### 并发限制
 
@@ -488,7 +489,7 @@ curl -X GET "https://rdcli.example.com/api/proofread/task?id=550e8400-e29b-41d4-
     "curl": "curl -X POST <rdcli-host>/api/proofread \\\n  -H \"x-api-key: ck_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \\\n  -F \"file=@文档.docx\" \\\n  -F \"callback_url=https://oa.example.com/api/callback\" \\\n  -F \"additional_instructions=重点检查数据引用\"",
     "fields": {
       "file": "(必填) Word 文档 .docx，最大 20MB",
-      "callback_url": "(必填) 核稿完成后回调地址，http:// 或 https://",
+      "callback_url": "(可选) 核稿完成后回调地址，http:// 或 https://，不传则通过 GET /api/proofread/task?id=xxx 轮询结果",
       "additional_instructions": "(可选) 追加核稿要求"
     }
   },
@@ -583,8 +584,11 @@ curl -X POST https://rdcli.example.com/api/proofread \
 # 响应：
 # { "code": 0, "timestamp":"...", "message": "success", "task_id": "550e8400...", "data": { "status": "pending" } }
 
-# Step 2：等待回调。核稿完成后，rdCLI 会 POST 到你的 callback_url，
+# Step 2：等待回调（或轮询）。核稿完成后，rdCLI 会 POST 到你的 callback_url，
 # 请求体即核稿结果（见上方「回调通知」一节）。
+# 如果不传 callback_url，可通过轮询获取结果：
+# curl -X GET "https://rdcli.example.com/api/proofread/task?id=550e8400..." \
+#   -H "x-api-key: ck_xxxx"
 
 # Step 3(optional)：如需撤销一个处理中的任务
 curl -X DELETE "https://rdcli.example.com/api/proofread/task?id=550e8400-e29b-41d4-a716-446655440000" \

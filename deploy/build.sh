@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
-# Build script for rd_cli Docker image
+# Build script for rd-cli Docker image
 #
 # Includes:
 #   - Node.js v22.23.2 + Claude Code CLI + rdCLI web UI
@@ -39,7 +39,7 @@ BUILD_START=$SECONDS
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-IMAGE_NAME="${IMAGE_NAME:-rd_cli}"
+IMAGE_NAME="${IMAGE_NAME:-rd-cli}"
 PIP_OFFLINE_STAGING="${SCRIPT_DIR}/.pip-offline"
 
 # ── Usage ────────────────────────────────────────────────────────
@@ -309,7 +309,6 @@ echo "=== Docker build ==="
 DOCKER_BUILDKIT=1 docker build \
     "${DOCKER_BUILD_ARGS[@]+"${DOCKER_BUILD_ARGS[@]}"}" \
     -t "${FULL_TAG}" \
-    -t "${IMAGE_NAME}:latest" \
     -f "${SCRIPT_DIR}/Dockerfile" \
     "${PROJECT_ROOT}"
 

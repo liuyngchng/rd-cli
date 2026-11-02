@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-APPIMAGE_DEFAULT="$HOME/workspace/rd_cli/release/desktop/rdcli-desktop-1.0.0-linux-x86_64.AppImage"
+APPIMAGE_DEFAULT="$HOME/workspace/rd-cli/release/desktop/rdcli-desktop-1.0.0-linux-x86_64.AppImage"
 APP_ID="ai.rdcli.desktop"
 DESKTOP_FILE="$HOME/.local/share/applications/${APP_ID}"
 ICON_BASE="$HOME/.local/share/icons/hicolor"
