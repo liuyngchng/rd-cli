@@ -76,14 +76,6 @@ echo 'ensure network llm_net exists'
 docker network create llm_net 2>/dev/null || true
 
 echo 'start container'
-# 持久化数据目录: ~/.rdcli (auth.db, users, plugins, logs 等)，映射到项目根目录的 data/rdcli
-DATA_DIR="${PROJECT_ROOT}/data/rdcli"
-mkdir -p "$DATA_DIR" \
-         "${DATA_DIR}/claude-projects"
-
-# 容器内 rdcli 用户 UID=1000 (与 Dockerfile 保持一致)，确保目录权限匹配。
-# 若出现权限问题，手动执行: sudo chown -R 1000 "$DATA_DIR"
-
 # 构建 --add-host 参数数组（每个域名同时封 IPv4 和 IPv6）
 ADD_HOST_ARGS=()
 for d in "${ADD_HOSTS[@]}"; do
@@ -96,8 +88,6 @@ docker run -dit \
     --security-opt seccomp=unconfined \
     --network llm_net \
     "${ADD_HOST_ARGS[@]}" \
-    -v "${DATA_DIR}:/home/rdcli/.rdcli" \
-    -v "${DATA_DIR}/claude-projects:/home/rdcli/.claude/projects" \
     -w /home/rdcli/workspace \
     -e PUBLIC_HOST="$PUBLIC_HOST" \
     -e PUBLIC_PORT="$HOST_PORT" \
@@ -112,5 +102,3 @@ docker run -dit \
     -e RDCLI_LOG_LEVEL=debug \
     -p ${HOST_PORT}:${CONTAINER_PORT} \
     ${IMAGE_NAME}:${IMAGE_VERSION}
-
-docker logs -f "$CONTAINER_NAME"
