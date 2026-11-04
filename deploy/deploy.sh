@@ -92,7 +92,7 @@ docker run -dit \
     -e PUBLIC_HOST="$PUBLIC_HOST" \
     -e PUBLIC_PORT="$HOST_PORT" \
     -e CONTAINER_NAME="$CONTAINER_NAME" \
-    -e ANTHROPIC_BASE_URL=http://api_adapter_g_app:16005 \
+    -e ANTHROPIC_BASE_URL=http://api-gate:16005 \
     -e ANTHROPIC_AUTH_TOKEN=sk-12345 \
     -e API_TIMEOUT_MS=600000 \
     -e ANTHROPIC_MODEL=deepseek-v4-pro \
